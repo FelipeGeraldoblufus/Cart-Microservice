@@ -33,6 +33,9 @@ services:
       - rabbitmq
     networks:
       - mynet
+    volumes:
+      - ./.env:/.env
+
 
 networks:
   mynet:
