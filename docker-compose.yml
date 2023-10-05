@@ -2,10 +2,11 @@ version: '3'
 services:
   postgres:
     image: postgres:latest
+    container_name: postgres
     environment:
-      POSTGRES_DB: "products"
-      POSTGRES_USER: "postgres"
-      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_DB: products
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     networks:
@@ -39,3 +40,5 @@ services:
 
 networks:
   mynet:
+    driver: bridge
+    

@@ -39,15 +39,18 @@ func declareQueue(ch *amqp.Channel) amqp.Queue {
 	return q
 }
 
+// Establece la calidad de servicio (QoS) para el canal de RabbitMQ.
 func setQoS(ch *amqp.Channel) {
 	err := ch.Qos(
-		1,     // prefetch count
-		0,     // prefetch size
-		false, // global
+		1,     // prefetch count: Especifica cuántos mensajes puede recibir un consumidor antes de que se detenga la entrega. En este caso, se establece en 1.
+		0,     // prefetch size: No se usa en este caso, se establece como 0.
+		false, // global: Indica si estas configuraciones de QoS se aplican a nivel de canal o a nivel de conexión. En este caso, es a nivel de canal (false).
 	)
+
 	failOnError(err, "Failed to set QoS")
 }
 
+// Registra un consumidor para la cola dada y devuelve un canal de entrega de mensajes.
 func registerConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery {
 	msgs, err := ch.Consume(
 		q.Name, // queue
@@ -74,18 +77,18 @@ func main() {
 	config.SetupRabbitMQ()
 	fmt.Println("RabbitMQ Connection configured...")
 
-	ch := getChannel()
-	q := declareQueue(ch)
-	setQoS(ch)
-	msgs := registerConsumer(ch, q)
+	ch := getChannel()              // Obtiene un canal de RabbitMQ
+	q := declareQueue(ch)           // Declara una cola y obtiene su estructura
+	setQoS(ch)                      // Establece la calidad de servicio en el canal
+	msgs := registerConsumer(ch, q) // Registra un consumidor para la cola y obtiene un canal de entrega de mensajes
 
 	var forever chan struct{}
 	go func() {
 		for d := range msgs {
-			internal.Handler(d, ch)
+			internal.Handler(d, ch) // Llama al manejador de mensajes internos con el mensaje y el canal de RabbitMQ
 		}
 	}()
 
 	log.Printf(" [*] Awaiting RPC requests")
-	<-forever
+	<-forever // Espera indefinidamente
 }
