@@ -29,7 +29,7 @@ jobs:
         run: |
           docker build -t products-microservice:latest .
           echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u diegogmrn --password-stdin
-          docker push products-microservice:latest
+          docker push docker.io/ecommerce-proyecto-integrador/products-microservice:latest
       - name: Debug secrets
         run: |
           echo "DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}"
