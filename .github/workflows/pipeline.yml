@@ -27,7 +27,7 @@ jobs:
       - name: Deploy to Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          docker build -t Products-microservice:latest .
+          docker build -t products-microservice:latest .
           docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }} 
-          docker push Products-microservice:latest 
+          docker push products-microservice:latest 
       
