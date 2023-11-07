@@ -24,8 +24,10 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 	defer cancel()
 
 	var response models.Response
-
+	log.Println(" [.] Received a message")
 	actionType := d.Type
+	log.Println(d)
+	log.Println(actionType)
 	switch actionType {
 	case "GET_PRODUCTS":
 		log.Println(" [.] Getting products")

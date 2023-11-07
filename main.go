@@ -28,12 +28,12 @@ func getChannel() *amqp.Channel {
 
 func declareQueue(ch *amqp.Channel) amqp.Queue {
 	q, err := ch.QueueDeclare(
-		"users_queue", // name
-		false,         // durable
-		false,         // delete when unused
-		false,         // exclusive
-		false,         // no-wait
-		nil,           // arguments
+		"products_queue", // name
+		false,            // durable
+		false,            // delete when unused
+		false,            // exclusive
+		false,            // no-wait
+		nil,              // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
 	return q

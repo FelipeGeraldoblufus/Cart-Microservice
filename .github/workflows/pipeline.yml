@@ -15,7 +15,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: 1.21.1
 
@@ -28,10 +28,6 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           docker build -t products-microservice:latest .
-          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u diegogmrn --password-stdin
+            echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u diegogmrn --password-stdin
           docker tag products-microservice:latest diegogmrn/products-microservice:latest
           docker push diegogmrn/products-microservice:latest
-      - name: Debug secrets
-        run: |
-          echo "DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}"
-          echo "DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}"
