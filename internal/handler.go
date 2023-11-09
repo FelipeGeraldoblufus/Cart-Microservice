@@ -25,9 +25,25 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 
 	var response models.Response
 	log.Println(" [.] Received a message")
-	actionType := d.Type
-	log.Println(d)
-	log.Println(actionType)
+
+	var Payload struct {
+		Pattern string `json:"pattern"`
+		Data    struct {
+			Data    json.RawMessage `json:"data"`
+			Options struct {
+				Type string `json:"type"`
+			} `json:"options"`
+		} `json:"data"`
+		ID string `json:"id"`
+	}
+	var err error
+	err = json.Unmarshal(d.Body, &Payload)
+
+	actionType := Payload.Data.Options.Type
+	log.Println("inicio", Payload.Data.Data)
+
+	dataJSON, err := json.Marshal(Payload.Data.Data)
+	failOnError(err, "Failed to marshal data")
 	switch actionType {
 	case "GET_PRODUCTS":
 		log.Println(" [.] Getting products")
@@ -52,7 +68,7 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 		var productJson []byte
 		var product models.Product
 
-		err = json.Unmarshal(d.Body, &data)
+		err = json.Unmarshal(Payload.Data.Data, &data)
 		product, err = controllers.GetProductById(data.Id)
 
 		productJson, err = json.Marshal(product)
@@ -74,11 +90,12 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 		log.Println(" [.] Creating product")
 
 		var product models.Product
-		err := json.Unmarshal(d.Body, &product)
+		err := json.Unmarshal(dataJSON, &product)
 		failOnError(err, "Failed to unmarshal product")
 		productJson, err := json.Marshal(product)
 		failOnError(err, "Failed to marshal product")
 
+		log.Println(product)
 		_, err = controllers.CreateProduct(product)
 		if err != nil {
 			response = models.Response{
@@ -92,6 +109,51 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 				Message: "Product created",
 				Data:    productJson,
 			}
+		}
+
+	case "CREATE_CATEGORY":
+		log.Println(" [.] Creating category")
+		//log.Println("data ", Payload.Data.Data)
+		//log.Println("data JSON", dataJSON)
+
+		var category models.Category
+		err := json.Unmarshal(Payload.Data.Data, &category)
+		failOnError(err, "Failed to unmarshal category")
+
+		log.Println("category ", category)
+
+		categoryJson, err := json.Marshal(category)
+		failOnError(err, "Failed to marshal category")
+
+		//err = json.Unmarshal(categoryJson, &category)
+
+		_, err = controllers.CreateCategory(category)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error creating category",
+				Data:    []byte(err.Error()),
+			}
+		} else {
+			response = models.Response{
+				Success: "succes",
+				Message: "Category created",
+				Data:    categoryJson,
+			}
+		}
+
+	case "GET_TOP3POPULARPRODUCTS":
+		log.Println(" [.] Getting top 3 popular products")
+
+		products, err := controllers.GetTop3PopularProducts()
+		failOnError(err, "Failed to get products")
+		productsJSON, err := json.Marshal(products)
+		failOnError(err, "Failed to marshal products")
+
+		response = models.Response{
+			Success: "succes",
+			Message: "Products retrieved",
+			Data:    productsJSON,
 		}
 	}
 
