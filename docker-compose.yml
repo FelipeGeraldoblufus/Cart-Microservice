@@ -38,23 +38,7 @@ services:
       - ./.env:/.env
       
 
-  imagenes:
-    build:
-      context: ../images-microservice/
-      dockerfile: Dockerfile
-    ports:
-      - "8181:8181"
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/products?sslmode=disable
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-    depends_on:
-      - postgres
-      - rabbitmq
-    networks:
-      - integrador_backend
-    volumes:
-      - ./.env:/.env
-      - ../images:/app/images  
+
 
 networks:
   integrador_backend:
