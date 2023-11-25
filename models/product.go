@@ -3,15 +3,16 @@ package models
 import "time"
 
 type Product struct {
-	ID            uint           `gorm:"primaryKey"`
-	Name          string         `gorm:"not null" json:"name"`
-	Description   string         `gorm:"not null" json:"description"`
-	Price         int            `gorm:"not null" json:"price"`
-	Brand         string         `gorm:"not null" json:"brand"`
-	InStock       bool           `gorm:"not null" json:"inStock"`
-	SizeAvailable string         `gorm:"not null" json:"sizeAvailable"`
-	Images        []ProductImage `gorm:"foreignKey:ProductID" json:"images"`
-	Reviews       string         `gorm:"not null" json:"reviews"`
+	ID              uint           `gorm:"primaryKey"`
+	Name            string         `gorm:"not null" json:"name"`
+	publicationDate string         `gorm:"not null" json:"publicationDate"`
+	author          int            `gorm:"not null" json:"author"`
+	Price           int            `gorm:"not null" json:"price"`
+	Description     string         `gorm:"not null" json:"description"`
+	totalStock      uint           `gorm:"not null" json:"totalStock"`
+	SizeAvailable   string         `gorm:"not null" json:"sizeAvailable"`
+	Images          []ProductImage `gorm:"foreignKey:ProductID" json:"images"`
+	Reviews         string         `gorm:"not null" json:"reviews"`
 
 	// Agrega un campo que represente la relación con la categoría
 	CategoryName string `gorm:"foreignKey:Name" json:"Category"` // Puedes usar uint o el tipo de dato que sea adecuado
@@ -20,6 +21,26 @@ type Product struct {
 
 type Category struct {
 	Name string `gorm:"primaryKey" json:"name"`
+}
+
+type CartItem struct {
+	Product  Product `json:"product"`
+	Quantity int     `json:"quantity"`
+}
+
+type Cart struct {
+	User  User       `json:"user"`
+	Items []CartItem `json:"items"`
+}
+
+type Order struct {
+	User  User       `json:"user"`
+	Items []CartItem `json:"items"`
+}
+
+type User struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
 }
 
 type ProductImage struct {
