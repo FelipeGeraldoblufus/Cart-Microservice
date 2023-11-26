@@ -6,8 +6,8 @@ import (
 
 	//"github.com/ValeHenriquez/example-rabbit-go/users-server/config"
 	//"github.com/ValeHenriquez/example-rabbit-go/users-server/internal"
-	"github.com/ecommerce-proyecto-integrador/products-microservice/mod/config"
-	"github.com/ecommerce-proyecto-integrador/products-microservice/mod/internal"
+	"github.com/FelipeGeraldoblufus/Cart/config"
+	"github.com/FelipeGeraldoblufus/Cart/internal"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
 )

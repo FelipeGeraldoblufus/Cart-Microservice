@@ -3,8 +3,8 @@ package controllers
 import (
 	"log"
 
-	db "github.com/ecommerce-proyecto-integrador/products-microservice/mod/config"
-	"github.com/ecommerce-proyecto-integrador/products-microservice/mod/models"
+	db "github.com/FelipeGeraldoblufus/Cart/config"
+	"github.com/FelipeGeraldoblufus/Cart/models"
 )
 
 func GetProducts() ([]models.Product, error) {

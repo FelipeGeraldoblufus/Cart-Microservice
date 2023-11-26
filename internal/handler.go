@@ -8,8 +8,8 @@ import (
 
 	//"github.com/ValeHenriquez/example-rabbit-go/tasks-server/controllers"
 	//"github.com/ValeHenriquez/example-rabbit-go/tasks-server/models"
-	"github.com/ecommerce-proyecto-integrador/products-microservice/mod/controllers"
-	"github.com/ecommerce-proyecto-integrador/products-microservice/mod/models"
+	"github.com/FelipeGeraldoblufus/Cart/controllers"
+	"github.com/FelipeGeraldoblufus/Cart/models"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

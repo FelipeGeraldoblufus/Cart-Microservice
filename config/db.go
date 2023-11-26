@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ecommerce-proyecto-integrador/products-microservice/mod/models"
+	"github.com/FelipeGeraldoblufus/Cart/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
