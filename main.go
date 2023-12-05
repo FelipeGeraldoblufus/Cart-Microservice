@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 
 	//"github.com/ValeHenriquez/example-rabbit-go/users-server/config"
 	//"github.com/ValeHenriquez/example-rabbit-go/users-server/internal"
 	"github.com/FelipeGeraldoblufus/Cart/config"
-	"github.com/FelipeGeraldoblufus/Cart/internal"
+	"github.com/FelipeGeraldoblufus/Cart/controllers"
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -66,6 +68,7 @@ func registerConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery {
 }
 
 func main() {
+
 	fmt.Println("Users MS starting...")
 
 	godotenv.Load()
@@ -74,10 +77,10 @@ func main() {
 	config.SetupDatabase()
 	fmt.Println("Database connection configured...")
 
-	config.SetupRabbitMQ()
+	//config.SetupRabbitMQ()
 	fmt.Println("RabbitMQ Connection configured...")
 
-	ch := getChannel()              // Obtiene un canal de RabbitMQ
+	/*ch := getChannel()              // Obtiene un canal de RabbitMQ
 	q := declareQueue(ch)           // Declara una cola y obtiene su estructura
 	setQoS(ch)                      // Establece la calidad de servicio en el canal
 	msgs := registerConsumer(ch, q) // Registra un consumidor para la cola y obtiene un canal de entrega de mensajes
@@ -87,8 +90,26 @@ func main() {
 		for d := range msgs {
 			internal.Handler(d, ch) // Llama al manejador de mensajes internos con el mensaje y el canal de RabbitMQ
 		}
-	}()
+	}()*/
 
-	log.Printf(" [*] Awaiting RPC requests")
-	<-forever // Espera indefinidamente
+	r := mux.NewRouter()
+
+	r.HandleFunc("/api/product", controllers.CreateProductRest).Methods("POST")
+	r.HandleFunc("/api/product/{name}", controllers.GetProductRest).Methods("GET")
+	r.HandleFunc("/api/product/{name}", controllers.DeleteProductRest).Methods("DELETE")
+	r.HandleFunc("/api/product/{name}", controllers.UpdateProductRest).Methods("PUT")
+
+	r.HandleFunc("/api/cartitem", controllers.CreateCartItemRest).Methods("POST")
+	r.HandleFunc("/api/cartitem/{id}", controllers.GetCartItemRest).Methods("GET")
+	r.HandleFunc("/api/cartitem/{id}", controllers.DeleteCartItemRest).Methods("DELETE")
+	r.HandleFunc("/api/cartitem/{id}", controllers.UpdateCartItemRest).Methods("PUT")
+
+	r.HandleFunc("/api/user", controllers.CreateUserRest).Methods("POST")
+	r.HandleFunc("/api/user/{username}", controllers.GetUSerRest).Methods("GET")
+	r.HandleFunc("/api/user/addcartitem", controllers.AddCartItemToUser).Methods("POST")
+
+	http.ListenAndServe(":3000", r)
+
+	/*log.Printf(" [*] Awaiting RPC requests")
+	<-forever // Espera indefinidamente*/
 }

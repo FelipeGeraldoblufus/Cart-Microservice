@@ -1,5 +1,6 @@
 package internal
 
+/*
 import (
 	"context"
 	"encoding/json"
@@ -18,7 +19,7 @@ func failOnError(err error, msg string) {
 		log.Panicf("%s: %s", msg, err)
 	}
 }
-
+/*
 func Handler(d amqp.Delivery, ch *amqp.Channel) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -174,3 +175,4 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 
 	d.Ack(false)
 }
+*/
