@@ -247,20 +247,18 @@ func DeleteCartItemRest(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func GetUSerRest(w http.ResponseWriter, r *http.Request) {
+func GetUserRest(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 	params := mux.Vars(r)
-	db.DB.First(&user, "username = ?", params["username"])
-	if user.Username != params["username"] {
+
+	if err := db.DB.Preload("Cart.Product").First(&user, "username = ?", params["username"]).Error; err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("product not found"))
+		w.Write([]byte("User not found"))
 		return
-
 	}
+
 	json.NewEncoder(w).Encode(&user)
-
 }
-
 func CreateUserRest(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 	err := json.NewDecoder(r.Body).Decode(&user)
@@ -305,7 +303,7 @@ func AddCartItemToUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user models.User
-	if err := db.DB.Preload("Cart.Product").First(&user, requestData.UserID).Error; err != nil {
+	if err := db.DB.Preload("Cart").First(&user, requestData.UserID).Error; err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("User not found"))
 		return
@@ -328,10 +326,21 @@ func AddCartItemToUser(w http.ResponseWriter, r *http.Request) {
 	cartItem.Quantity = requestData.Quantity
 	cartItem.UserID = requestData.UserID
 
-	if err := db.DB.Create(&cartItem).Error; err != nil {
+	if err := db.DB.Preload("Product").Create(&cartItem).Error; err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
+	}
+
+	// Cargar manualmente la información del producto en el carrito
+	for i, cartItem := range user.Cart {
+		var product models.Product
+		if err := db.DB.First(&product, cartItem.ProductID).Error; err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		user.Cart[i].Product = product
 	}
 
 	// Actualizar otras propiedades del usuario si es necesario.
@@ -344,6 +353,92 @@ func AddCartItemToUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(&user)
+}
+
+// RemoveCartItemFromUser elimina un elemento del carrito de un usuario
+func RemoveCartItemFromUser(w http.ResponseWriter, r *http.Request) {
+	var requestData struct {
+		UserID     uint `json:"userID"`
+		CartItemID uint `json:"cartItemID"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	var user models.User
+	if err := db.DB.Preload("Cart").First(&user, requestData.UserID).Error; err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("User not found"))
+		return
+	}
+
+	// Buscar y eliminar el CartItem de la base de datos y del carrito del usuario
+	var cartItemToRemove models.CartItem
+	for i, item := range user.Cart {
+		if item.ID == requestData.CartItemID {
+			cartItemToRemove = item
+
+			// Paso 1: Eliminar el CartItem de la base de datos
+			if err := db.DB.Delete(&cartItemToRemove).Error; err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+
+			// Paso 2: Eliminar el elemento del carrito
+			user.Cart = append(user.Cart[:i], user.Cart[i+1:]...)
+			break
+		}
+	}
+
+	// Actualizar el usuario en la base de datos después de la eliminación
+	if err := db.DB.Save(&user).Error; err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	json.NewEncoder(w).Encode(&user)
+}
+
+func EditUser(w http.ResponseWriter, r *http.Request) {
+	// Estructura para decodificar la solicitud
+	var requestData struct {
+		CurrentUsername string `json:"currentUsername"`
+		NewUsername     string `json:"newUsername"`
+	}
+
+	// Decodificar la solicitud y obtener los nombres de usuario
+	err := json.NewDecoder(r.Body).Decode(&requestData)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Buscar el usuario actual en la base de datos
+	var existingUser models.User
+	if err := db.DB.Preload("Cart.Product").Where("username = ?", requestData.CurrentUsername).First(&existingUser).Error; err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("User not found"))
+		return
+	}
+
+	// Modificar el nombre de usuario
+	existingUser.Username = requestData.NewUsername
+
+	// Guardar los cambios en la base de datos
+	if err := db.DB.Save(&existingUser).Error; err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Responder con el usuario actualizado
+	json.NewEncoder(w).Encode(&existingUser)
 }
 
 /*

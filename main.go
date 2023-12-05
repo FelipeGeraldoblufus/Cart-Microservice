@@ -105,8 +105,10 @@ func main() {
 	r.HandleFunc("/api/cartitem/{id}", controllers.UpdateCartItemRest).Methods("PUT")
 
 	r.HandleFunc("/api/user", controllers.CreateUserRest).Methods("POST")
-	r.HandleFunc("/api/user/{username}", controllers.GetUSerRest).Methods("GET")
+	r.HandleFunc("/api/user/{username}", controllers.GetUserRest).Methods("GET")
 	r.HandleFunc("/api/user/addcartitem", controllers.AddCartItemToUser).Methods("POST")
+	r.HandleFunc("/api/user/removecartitem", controllers.RemoveCartItemFromUser).Methods("DELETE")
+	r.HandleFunc("/api/user/edituser", controllers.EditUser).Methods("PUT")
 
 	http.ListenAndServe(":3000", r)
 
