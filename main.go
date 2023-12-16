@@ -9,6 +9,7 @@ import (
 	//"github.com/ValeHenriquez/example-rabbit-go/users-server/internal"
 	"github.com/FelipeGeraldoblufus/Cart/config"
 	"github.com/FelipeGeraldoblufus/Cart/controllers"
+	"github.com/FelipeGeraldoblufus/Cart/internal"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -29,13 +30,13 @@ func getChannel() *amqp.Channel {
 }
 
 func declareQueue(ch *amqp.Channel) amqp.Queue {
-	q, err := ch.QueueDeclare(
-		"products_queue", // name
-		false,            // durable
-		false,            // delete when unused
-		false,            // exclusive
-		false,            // no-wait
-		nil,              // arguments
+	q, err := ch.QueueDeclarePassive(
+		"catalog", // name
+		false,     // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
 	return q
@@ -77,10 +78,10 @@ func main() {
 	config.SetupDatabase()
 	fmt.Println("Database connection configured...")
 
-	//config.SetupRabbitMQ()
+	config.SetupRabbitMQ()
 	fmt.Println("RabbitMQ Connection configured...")
 
-	/*ch := getChannel()              // Obtiene un canal de RabbitMQ
+	ch := getChannel()              // Obtiene un canal de RabbitMQ
 	q := declareQueue(ch)           // Declara una cola y obtiene su estructura
 	setQoS(ch)                      // Establece la calidad de servicio en el canal
 	msgs := registerConsumer(ch, q) // Registra un consumidor para la cola y obtiene un canal de entrega de mensajes
@@ -90,7 +91,7 @@ func main() {
 		for d := range msgs {
 			internal.Handler(d, ch) // Llama al manejador de mensajes internos con el mensaje y el canal de RabbitMQ
 		}
-	}()*/
+	}()
 
 	r := mux.NewRouter()
 
@@ -108,10 +109,13 @@ func main() {
 	r.HandleFunc("/api/user/{username}", controllers.GetUserRest).Methods("GET")
 	r.HandleFunc("/api/user/addcartitem", controllers.AddCartItemToUser).Methods("POST")
 	r.HandleFunc("/api/user/removecartitem", controllers.RemoveCartItemFromUser).Methods("DELETE")
-	r.HandleFunc("/api/user/edituser", controllers.EditUser).Methods("PUT")
+	r.HandleFunc("/api/user/edituser", controllers.EditUserREST).Methods("PUT")
+
+	r.HandleFunc("/api/order", controllers.CreateOrderREST).Methods("POST")
+	r.HandleFunc("/api/user/orders/{username}", controllers.GetOrdersByUsernameREST).Methods("GET")
 
 	http.ListenAndServe(":3000", r)
 
-	/*log.Printf(" [*] Awaiting RPC requests")
+	log.Printf(" [*] Awaiting RPC requests")
 	<-forever // Espera indefinidamente*/
 }

@@ -1,6 +1,5 @@
 package internal
 
-/*
 import (
 	"context"
 	"encoding/json"
@@ -19,7 +18,7 @@ func failOnError(err error, msg string) {
 		log.Panicf("%s: %s", msg, err)
 	}
 }
-/*
+
 func Handler(d amqp.Delivery, ch *amqp.Channel) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -28,28 +27,22 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 	log.Println(" [.] Received a message")
 
 	var Payload struct {
-		Pattern string `json:"pattern"`
-		Data    struct {
-			Data    json.RawMessage `json:"data"`
-			Options struct {
-				Type string `json:"type"`
-			} `json:"options"`
-		} `json:"data"`
-		ID string `json:"id"`
+		Pattern string          `json:"pattern"`
+		Data    json.RawMessage `json:"data"`
+		ID      string          `json:"id"`
 	}
 	var err error
 	err = json.Unmarshal(d.Body, &Payload)
 
-	actionType := Payload.Data.Options.Type
-	log.Println("inicio", Payload.Data.Data)
+	actionType := Payload.Pattern
 
-	dataJSON, err := json.Marshal(Payload.Data.Data)
+	//dataJSON, err := json.Marshal(Payload.Data)
 	failOnError(err, "Failed to marshal data")
 	switch actionType {
-	case "GET_PRODUCTS":
+	case "GET_PRODUCT":
 		log.Println(" [.] Getting products")
-
-		products, err := controllers.GetProducts()
+		/*products, err := controllers.GET()
+		log.Println(products)
 		failOnError(err, "Failed to get products")
 		productsJSON, err := json.Marshal(products)
 		failOnError(err, "Failed to marshal products")
@@ -58,21 +51,21 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 			Success: "succes",
 			Message: "Products retrieved",
 			Data:    productsJSON,
-		}
+		}*/
 
-	case "GET_PRODUCTBYID":
-		log.Println(" [.] Getting product by id")
+	case "GET_USERBYNAME":
+		log.Println(" [.] Getting product by Name")
 		var data struct {
-			Id string `json:"id"`
+			Name string `json:"username"`
 		}
 		var err error
-		var productJson []byte
-		var product models.Product
+		var userJson []byte
+		var users models.User
 
-		err = json.Unmarshal(Payload.Data.Data, &data)
-		product, err = controllers.GetProductById(data.Id)
+		err = json.Unmarshal(Payload.Data, &data)
+		users, err = controllers.GetByUser(data.Name)
 
-		productJson, err = json.Marshal(product)
+		userJson, err = json.Marshal(users)
 		if err != nil {
 			response = models.Response{
 				Success: "error",
@@ -83,41 +76,424 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 			response = models.Response{
 				Success: "succes",
 				Message: "Product retrieved",
-				Data:    productJson,
+				Data:    userJson,
+			}
+		}
+
+	case "EDIT_PRODUCT":
+		log.Println(" [.] Editing product by Name")
+		var data struct {
+			Product        string `json:"product"`
+			NewNameProduct string `json:"newnameProduct"`
+		}
+		var err error
+		var userJson []byte
+		var producto models.Product
+
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data)
+
+		// Decodificar los datos recibidos
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llamada a la función para actualizar el producto
+		producto, err = controllers.UpdateProduct(data.Product, data.NewNameProduct)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error updating product",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Convertir el resultado a JSON y preparar la respuesta
+		userJson, err = json.Marshal(producto)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error marshaling JSON",
+				Data:    []byte(err.Error()),
+			}
+		} else {
+			response = models.Response{
+				Success: "success",
+				Message: "Product updated",
+				Data:    userJson,
 			}
 		}
 
 	case "CREATE_PRODUCT":
 		log.Println(" [.] Creating product")
-
+		var data struct {
+			Name string `json:"name"`
+		}
+		var err error
+		var dataJson []byte
 		var product models.Product
-		err := json.Unmarshal(dataJSON, &product)
-		failOnError(err, "Failed to unmarshal product")
-		productJson, err := json.Marshal(product)
-		failOnError(err, "Failed to marshal product")
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.Name)
 
-		log.Println(product)
-		_, err = controllers.CreateProduct(product)
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		product, err = controllers.CreateProduct(data.Name)
 		if err != nil {
 			response = models.Response{
 				Success: "error",
 				Message: "Error creating product",
 				Data:    []byte(err.Error()),
 			}
+			break
+		}
+		dataJson, err = json.Marshal(product)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error marshaling JSON",
+				Data:    []byte(err.Error()),
+			}
 		} else {
 			response = models.Response{
-				Success: "succes",
+				Success: "success",
 				Message: "Product created",
-				Data:    productJson,
+				Data:    dataJson,
 			}
 		}
 
+	case "DELETE_PRODUCT":
+		log.Println(" [.] Deleting product")
+		var data struct {
+			Name string `json:"name"`
+		}
+		var err error
+		var dataJson []byte
+		var product models.Product
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.Name)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		err = controllers.DeleteProductByName(data.Name)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error Deleting product",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+		dataJson, err = json.Marshal(product)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error marshaling JSON",
+				Data:    []byte(err.Error()),
+			}
+		} else {
+			response = models.Response{
+				Success: "success",
+				Message: "Product deleted",
+				Data:    dataJson,
+			}
+		}
+	case "CREATE_CARTITEM":
+		log.Println(" [.] Creating cartitem")
+		var data struct {
+			UserID      uint   `json:"userID"`
+			ProductName string `json:"productName"`
+			Quantity    int    `json:"quantity"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.UserID, data.ProductName, data.Quantity)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		err = controllers.AddCartItemToUserByID(data.UserID, data.ProductName, data.Quantity)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error creating cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "Cartitem created successfully",
+			Data:    nil, // Puedes cambiar esto si necesitas enviar datos específicos en la respuesta
+		}
+
+	case "DELETE_CARTITEM":
+		log.Println(" [.] Deleting cartitem")
+		var data struct {
+			UserID     uint `json:"userID"`
+			CartItemID uint `json:"cartItemID"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.UserID, data.CartItemID)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para eliminar el CartItem
+		_, err = controllers.RemoveCartItemFromUserByID(data.UserID, data.CartItemID)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error deleting cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "CartItem deleted successfully",
+			Data:    nil, // No necesitas enviar datos específicos en la respuesta
+		}
+
+	case "EDIT_USER":
+		log.Println(" [.] Editing user")
+		var data struct {
+			CurrentUsername string `json:"currentUsername"`
+			NewUsername     string `json:"newUsername"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.CurrentUsername, data.NewUsername)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para editar el usuario
+		_, err = controllers.EditUser(data.CurrentUsername, data.NewUsername)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error editing user",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "User edited successfully",
+			Data:    nil, // No necesitas enviar datos específicos en la respuesta
+		}
+
+	case "CREATE_USER":
+		log.Println(" [.] Creating user")
+		var data struct {
+			Username string `json:"username"`
+		}
+		var err error
+
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Verificar que el campo necesario (username) no esté vacío
+		if data.Username == "" {
+			response = models.Response{
+				Success: "error",
+				Message: "Username is required",
+				Data:    nil,
+			}
+			break
+		}
+
+		// Llama a la función para crear el usuario
+		createdUser, err := controllers.CreateUser(data.Username)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error creating user",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Convertir createdUser a formato JSON y luego a []byte
+		userData, err := json.Marshal(createdUser)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error encoding user data",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "User created successfully",
+			Data:    userData,
+		}
+	case "CREATE_ORDER":
+		log.Println(" [.] Creating order")
+		var data struct {
+			Username string `json:"username"`
+		}
+		var err error
+
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Verificar que el campo necesario (username) no esté vacío
+		if data.Username == "" {
+			response = models.Response{
+				Success: "error",
+				Message: "Username is required",
+				Data:    nil,
+			}
+			break
+		}
+
+		// Llama a la función para crear el usuario
+		createdOrder, err := controllers.CreateOrder(data.Username)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error creating order",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Convertir createdOrder a formato JSON y luego a []byte
+		orderData, err := json.Marshal(createdOrder)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error encoding order data",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "Order created successfully",
+			Data:    orderData,
+		}
+	case "GET_ORDERSBYUSERNAME":
+		log.Println(" [.] Getting orders by Username")
+		var data struct {
+			Username string `json:"username"`
+		}
+		var err error
+		var ordersJson []byte
+		var orders []models.Order
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		orders, err = controllers.GetOrdersByUsername(data.Username)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error getting orders",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		ordersJson, err = json.Marshal(orders)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error marshaling JSON",
+				Data:    []byte(err.Error()),
+			}
+		} else {
+			response = models.Response{
+				Success: "success",
+				Message: "Orders retrieved",
+				Data:    ordersJson,
+			}
+		}
 	case "CREATE_CATEGORY":
 		log.Println(" [.] Creating category")
 		//log.Println("data ", Payload.Data.Data)
 		//log.Println("data JSON", dataJSON)
 
-		var category models.Category
+		/*var category models.Category
 		err := json.Unmarshal(Payload.Data.Data, &category)
 		failOnError(err, "Failed to unmarshal category")
 
@@ -141,9 +517,9 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 				Message: "Category created",
 				Data:    categoryJson,
 			}
-		}
+		}*/
 
-	case "GET_TOP3POPULARPRODUCTS":
+		/*case "GET_TOP3POPULARPRODUCTS":
 		log.Println(" [.] Getting top 3 popular products")
 
 		products, err := controllers.GetTop3PopularProducts()
@@ -155,7 +531,7 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 			Success: "succes",
 			Message: "Products retrieved",
 			Data:    productsJSON,
-		}
+		}*/
 	}
 
 	responseJSON, err := json.Marshal(response)
@@ -175,4 +551,3 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 
 	d.Ack(false)
 }
-*/
