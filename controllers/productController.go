@@ -442,13 +442,17 @@ func CreateUserRest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&user)
 }
 
-func AddCartItemToUserByID(userID uint, productName string, quantity int) error {
+func AddCartItemToUserByID(username string, productName string, quantity int) error {
 	// Buscar al usuario por ID
 	var user models.User
-	if err := db.DB.Preload("Cart.Product").First(&user, userID).Error; err != nil {
-		return fmt.Errorf("User not found: %v", err)
+	user, err := GetByUser(username)
+	if err != nil {
+		return err
 	}
 
+	if err := db.DB.Preload("Cart.Product").First(&user, user.ID).Error; err != nil {
+		return fmt.Errorf("User not found: %v", err)
+	}
 	// Buscar el producto por nombre
 	var product models.Product
 	if err := db.DB.Where("name = ?", productName).First(&product).Error; err != nil {
@@ -480,7 +484,7 @@ func AddCartItemToUserByID(userID uint, productName string, quantity int) error 
 	var cartItem models.CartItem
 	cartItem.ProductID = product.ID
 	cartItem.Quantity = quantity
-	cartItem.UserID = userID
+	cartItem.UserID = user.ID
 
 	if err := db.DB.Preload("Product").Create(&cartItem).Error; err != nil {
 		return fmt.Errorf("Error creating cart item: %v", err)
@@ -734,10 +738,45 @@ func EditUserREST(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&existingUser)
 }
 
-func CreateOrder(username string) (*models.Order, error) {
+func DeleteUser(usuario string) error {
+	// Abre una transacción
+	tx := db.DB.Begin()
+
+	// Maneja los errores de la transacción
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Busca el producto por nombre
 	var user models.User
-	if err := db.DB.Preload("Cart.Product").First(&user, "username = ?", username).Error; err != nil {
+	if err := tx.Where("username = ?", usuario).First(&user).Error; err != nil {
+		tx.Rollback() // Deshace la transacción en caso de error
+		return err
+	}
+
+	// Elimina el usuario
+	if err := tx.Delete(&user).Error; err != nil {
+		tx.Rollback() // Deshace la transacción en caso de error
+		return err
+	}
+
+	// Confirma la transacción si no hay errores
+	tx.Commit()
+
+	return nil
+}
+
+func CreateOrder(username string, cartItemIDs []uint) (*models.Order, error) {
+	user, err := GetByUser(username)
+	if err != nil {
 		return nil, err
+	}
+
+	// Preload de los CartItems para asegurar que se carguen con el usuario
+	if err := db.DB.Preload("Cart.Product").First(&user, user.ID).Error; err != nil {
+		return nil, fmt.Errorf("User not found: %v", err)
 	}
 
 	// Verificar si el carrito del usuario está vacío
@@ -749,14 +788,35 @@ func CreateOrder(username string) (*models.Order, error) {
 	order := models.Order{
 		UserID: user.ID,
 		User:   user,
-		Items:  user.Cart,
+		Items:  make([]models.CartItem, 0), // Inicializar la lista de CartItems para evitar nil pointer
 	}
 
-	// Eliminar los CartItem de la base de datos
-	for _, cartItem := range user.Cart {
-		if err := db.DB.Delete(&cartItem).Error; err != nil {
+	// Iterar sobre los CartItemIDs proporcionados
+	for _, cartItemID := range cartItemIDs {
+		// Buscar el CartItem en el carrito del usuario
+		var cartItemToRemove *models.CartItem
+		for i, item := range user.Cart {
+			if item.ID == cartItemID {
+				cartItemToRemove = &user.Cart[i]
+				break
+			}
+		}
+
+		// Verificar si se encontró el CartItem
+		if cartItemToRemove == nil {
+			return nil, fmt.Errorf("CartItem with ID %d not found in user's cart", cartItemID)
+		}
+
+		// Asignar el OrderID al CartItem
+		cartItemToRemove.OrderID = order.ID
+
+		// Actualizar el CartItem en la base de datos
+		if err := db.DB.Save(cartItemToRemove).Error; err != nil {
 			return nil, err
 		}
+
+		// Agregar el CartItem a la lista de la orden
+		order.Items = append(order.Items, *cartItemToRemove)
 	}
 
 	// Limpiar el carrito del usuario después de crear la orden
@@ -769,11 +829,6 @@ func CreateOrder(username string) (*models.Order, error) {
 
 	// Crear la orden
 	if err := db.DB.Create(&order).Error; err != nil {
-		return nil, err
-	}
-
-	// Cargar manualmente los CartItem de la base de datos
-	if err := db.DB.Model(&order).Association("Items").Find(&order.Items); err != nil {
 		return nil, err
 	}
 
@@ -881,4 +936,80 @@ func GetOrdersByUsernameREST(w http.ResponseWriter, r *http.Request) {
 	// Puedes enviar 'user' y 'orders' como respuesta JSON.
 
 	json.NewEncoder(w).Encode(&orders)
+}
+
+func UpdateCartItemQuantity(cartItemID uint, newQuantity int) error {
+	// Buscar el CartItem por su ID
+	var cartItem models.CartItem
+	if err := db.DB.First(&cartItem, cartItemID).Error; err != nil {
+		return fmt.Errorf("CartItem not found: %v", err)
+	}
+
+	// Actualizar la cantidad del CartItem
+	cartItem.Quantity = newQuantity
+
+	// Guardar los cambios en la base de datos
+	if err := db.DB.Save(&cartItem).Error; err != nil {
+		return fmt.Errorf("Error updating CartItem quantity: %v", err)
+	}
+
+	return nil
+}
+
+func UpdateCartItemOrder(cartItemID uint, OrderID uint) error {
+	// Buscar el CartItem por su ID
+	var cartItem models.CartItem
+	if err := db.DB.First(&cartItem, cartItemID).Error; err != nil {
+		return fmt.Errorf("CartItem not found: %v", err)
+	}
+
+	// Actualizar la cantidad del CartItem
+	cartItem.OrderID = OrderID
+
+	// Guardar los cambios en la base de datos
+	if err := db.DB.Save(&cartItem).Error; err != nil {
+		return fmt.Errorf("Error updating CartItem quantity: %v", err)
+	}
+
+	return nil
+}
+
+func RemoveCartItemFromUserByUsername(username string, cartItemID uint) (*models.User, error) {
+	// Obtener el usuario por nombre de usuario
+	user, err := GetByUser(username)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.DB.Preload("Cart.Product").First(&user, user.ID).Error; err != nil {
+		return nil, fmt.Errorf("User not found: %v", err)
+	}
+
+	// Buscar y eliminar el CartItem del carrito del usuario
+	var cartItemToRemove models.CartItem
+	for i, item := range user.Cart {
+		if item.ID == cartItemID {
+			cartItemToRemove = item
+
+			// Paso 1: Eliminar el CartItem del carrito
+			user.Cart = append(user.Cart[:i], user.Cart[i+1:]...)
+			break
+		}
+	}
+
+	// Verificar si se encontró el CartItem
+	if cartItemToRemove.ID == 0 {
+		return nil, fmt.Errorf("CartItem not found")
+	}
+
+	// Paso 2: Eliminar el CartItem de la base de datos
+	if err := db.DB.Delete(&cartItemToRemove).Error; err != nil {
+		return nil, fmt.Errorf("Error deleting CartItem: %v", err)
+	}
+
+	// Paso 3: Actualizar el usuario en la base de datos después de la eliminación
+	if err := db.DB.Save(&user).Error; err != nil {
+		return nil, fmt.Errorf("Error saving user: %v", err)
+	}
+
+	return &user, nil
 }

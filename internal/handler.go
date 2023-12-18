@@ -220,16 +220,17 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 				Data:    dataJson,
 			}
 		}
+
 	case "CREATE_CARTITEM":
 		log.Println(" [.] Creating cartitem")
 		var data struct {
-			UserID      uint   `json:"userID"`
+			Username    string `json:"username"`
 			ProductName string `json:"productName"`
 			Quantity    int    `json:"quantity"`
 		}
 		var err error
 		// Log de depuración para verificar los datos recibidos
-		log.Printf("Received data: %+v\n", data.UserID, data.ProductName, data.Quantity)
+		log.Printf("Received data: %+v\n", data.Username, data.ProductName, data.Quantity)
 
 		err = json.Unmarshal(Payload.Data, &data)
 		if err != nil {
@@ -241,7 +242,7 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 			break
 		}
 
-		err = controllers.AddCartItemToUserByID(data.UserID, data.ProductName, data.Quantity)
+		err = controllers.AddCartItemToUserByID(data.Username, data.ProductName, data.Quantity)
 		if err != nil {
 			response = models.Response{
 				Success: "error",
@@ -254,44 +255,7 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 		response = models.Response{
 			Success: "success",
 			Message: "Cartitem created successfully",
-			Data:    nil, // Puedes cambiar esto si necesitas enviar datos específicos en la respuesta
-		}
-
-	case "DELETE_CARTITEM":
-		log.Println(" [.] Deleting cartitem")
-		var data struct {
-			UserID     uint `json:"userID"`
-			CartItemID uint `json:"cartItemID"`
-		}
-		var err error
-		// Log de depuración para verificar los datos recibidos
-		log.Printf("Received data: %+v\n", data.UserID, data.CartItemID)
-
-		err = json.Unmarshal(Payload.Data, &data)
-		if err != nil {
-			response = models.Response{
-				Success: "error",
-				Message: "Error decoding JSON",
-				Data:    []byte(err.Error()),
-			}
-			break
-		}
-
-		// Llama a la función para eliminar el CartItem
-		_, err = controllers.RemoveCartItemFromUserByID(data.UserID, data.CartItemID)
-		if err != nil {
-			response = models.Response{
-				Success: "error",
-				Message: "Error deleting cartitem",
-				Data:    []byte(err.Error()),
-			}
-			break
-		}
-
-		response = models.Response{
-			Success: "success",
-			Message: "CartItem deleted successfully",
-			Data:    nil, // No necesitas enviar datos específicos en la respuesta
+			Data:    []byte("CartItem created successfully"), // Puedes cambiar esto si necesitas enviar datos específicos en la respuesta
 		}
 
 	case "EDIT_USER":
@@ -388,10 +352,48 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 			Message: "User created successfully",
 			Data:    userData,
 		}
+
+	case "DELETE_USER":
+		log.Println(" [.] Deleting user")
+		var data struct {
+			Username string `json:"username"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.Username)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para eliminar el CartItem
+		err = controllers.DeleteUser(data.Username)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error deleting cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "User deleted successfully",
+			Data:    nil, // No necesitas enviar datos específicos en la respuesta
+		}
+
 	case "CREATE_ORDER":
 		log.Println(" [.] Creating order")
 		var data struct {
-			Username string `json:"username"`
+			Username    string `json:"username"`
+			CartItemIDs []uint `json:"cartItemIDs"`
 		}
 		var err error
 
@@ -418,8 +420,8 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 			break
 		}
 
-		// Llama a la función para crear el usuario
-		createdOrder, err := controllers.CreateOrder(data.Username)
+		// Llama a la función para crear la orden
+		createdOrder, err := controllers.CreateOrder(data.Username, data.CartItemIDs)
 		if err != nil {
 			response = models.Response{
 				Success: "error",
@@ -487,6 +489,117 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 				Message: "Orders retrieved",
 				Data:    ordersJson,
 			}
+		}
+
+	case "EDIT_CARTITEM":
+		log.Println(" [.] updating cartitem")
+		var data struct {
+			CartItemID uint `json:"cartItemID"`
+			Quantity   int  `json:"quantity"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.CartItemID, data.Quantity)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para eliminar el CartItem
+		err = controllers.UpdateCartItemQuantity(data.CartItemID, data.Quantity)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error updating cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "CartItem updated successfully",
+			Data:    []byte("Cantidad actualizada exitosamente"), // No necesitas enviar datos específicos en la respuesta
+		}
+
+	case "EDIT_CARTITEMORDER":
+		log.Println(" [.] updating cartitem")
+		var data struct {
+			CartItemID uint `json:"cartItemID"`
+			Order      uint `json:"OrderID"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.CartItemID, data.Order)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para eliminar el CartItem
+		err = controllers.UpdateCartItemOrder(data.CartItemID, data.Order)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error updating cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "CartItem updated successfully",
+			Data:    []byte("Orden asignada exitosamente"), // No necesitas enviar datos específicos en la respuesta
+		}
+
+	case "DELETE_CARTITEM":
+		log.Println(" [.] Deleting cartitem")
+		var data struct {
+			Username   string `json:"username"`
+			CartItemID uint   `json:"cartItemID"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.Username, data.CartItemID)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para eliminar el CartItem
+		_, err = controllers.RemoveCartItemFromUserByUsername(data.Username, data.CartItemID)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error deleting cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "CartItem deleted successfully",
+			Data:    []byte("CartItem deleted successfully"), // No necesitas enviar datos específicos en la respuesta
 		}
 	case "CREATE_CATEGORY":
 		log.Println(" [.] Creating category")

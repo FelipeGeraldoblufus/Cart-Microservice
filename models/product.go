@@ -17,12 +17,12 @@ type CartItem struct {
 type Order struct {
 	ID     uint       `gorm:"primaryKey" json:"id"`
 	UserID uint       `gorm:"not null" json:"user_id"`
-	User   User       `gorm:"foreignKey:UserID" json:"user"`
-	Items  []CartItem `gorm:"foreignKey:OrderID" json:"items"`
+	User   User       `gorm:"constraint:OnDelete:CASCADE" json:"user"`
+	Items  []CartItem `gorm:"constraint:OnDelete:CASCADE" json:"items"`
 }
 
 type User struct {
 	ID       uint       `gorm:"primaryKey" json:"id"`
 	Username string     `gorm:"not null;unique" json:"username"`
-	Cart     []CartItem `gorm:"foreignKey:UserID" json:"cart"`
+	Cart     []CartItem `gorm:"constraint:OnDelete:CASCADE" json:"cart"`
 }
