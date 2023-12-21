@@ -442,71 +442,50 @@ func CreateUserRest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&user)
 }
 
-func AddCartItemToUserByID(username string, productName string, quantity int) error {
+func AddCartItemToUserByID(username string, productName string, quantity int) (*models.CartItem, error) {
 	// Buscar al usuario por ID
 	var user models.User
 	user, err := GetByUser(username)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := db.DB.Preload("Cart.Product").First(&user, user.ID).Error; err != nil {
-		return fmt.Errorf("User not found: %v", err)
+		return nil, fmt.Errorf("User not found: %v", err)
 	}
+
 	// Buscar el producto por nombre
 	var product models.Product
 	if err := db.DB.Where("name = ?", productName).First(&product).Error; err != nil {
 		// Si el producto no existe, créalo antes de agregar al carrito
 		newProduct := models.Product{Name: productName}
 		if err := db.DB.Create(&newProduct).Error; err != nil {
-			return fmt.Errorf("Error creating product: %v", err)
+			return nil, fmt.Errorf("Error creating product: %v", err)
 		}
 		product = newProduct
 	}
 
-	// Buscar si el producto ya está en el carrito
-	for _, cartItem := range user.Cart {
-		if cartItem.ProductID == product.ID {
-			// Actualizar la cantidad del producto si ya está en el carrito
-			cartItem.Quantity += quantity
-			if err := db.DB.Save(&cartItem).Error; err != nil {
-				return fmt.Errorf("Error updating cart item: %v", err)
-			}
-			// Actualizar otras propiedades del usuario si es necesario.
-			if err := db.DB.Save(&user).Error; err != nil {
-				return fmt.Errorf("Error updating user: %v", err)
-			}
-			return nil
-		}
+	// Crear un nuevo CartItem con la cantidad especificada
+	cartItem := models.CartItem{
+		ProductID: product.ID,
+		Quantity:  quantity,
+		UserID:    user.ID,
 	}
 
-	// Si el producto no está en el carrito, agregar un nuevo CartItem
-	var cartItem models.CartItem
-	cartItem.ProductID = product.ID
-	cartItem.Quantity = quantity
-	cartItem.UserID = user.ID
-
-	if err := db.DB.Preload("Product").Create(&cartItem).Error; err != nil {
-		return fmt.Errorf("Error creating cart item: %v", err)
+	// Guardar el nuevo CartItem en la base de datos
+	if err := db.DB.Create(&cartItem).Error; err != nil {
+		return nil, fmt.Errorf("Error creating cart item: %v", err)
 	}
 
-	// Cargar manualmente la información del producto en el carrito
-	for i, cartItem := range user.Cart {
-		var product models.Product
-		if err := db.DB.First(&product, cartItem.ProductID).Error; err != nil {
-			return fmt.Errorf("Error loading product information: %v", err)
-		}
-		user.Cart[i].Product = product
-	}
-
-	// Actualizar otras propiedades del usuario si es necesario.
+	// Agregar el nuevo CartItem al carrito del usuario
 	user.Cart = append(user.Cart, cartItem)
 
+	// Guardar los cambios en el usuario
 	if err := db.DB.Save(&user).Error; err != nil {
-		return fmt.Errorf("Error updating user: %v", err)
+		return nil, fmt.Errorf("Error updating user: %v", err)
 	}
 
-	return nil
+	return &cartItem, nil
 }
 
 // Agregar un producto al carrito de un usuario
