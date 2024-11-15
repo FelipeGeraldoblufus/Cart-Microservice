@@ -1,49 +1,45 @@
 package controllers
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"net/http"
-	"strconv"
-
 	db "github.com/FelipeGeraldoblufus/product-microservice-go/config"
 	"github.com/FelipeGeraldoblufus/product-microservice-go/models"
-	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )
 
 func CreateUser(username string) (*models.User, error) {
-	// Crear un nuevo usuario con el nombre proporcionado
+	// Crear un nuevo usuario sin el carrito (carrito ha sido eliminado)
 	newUser := models.User{
 		Username: username,
-		Cart:     []models.CartItem{},
 	}
 
-	// Verifica si el nombre de usuario ya existe en la base de datos
+	// Verificar si el nombre de usuario ya existe en la base de datos
 	var existingUser models.User
 	if err := db.DB.Where("username = ?", newUser.Username).First(&existingUser).Error; err == nil {
-		return nil, err
+		// Si el usuario ya existe, devolver un error
+		return nil, errors.New("username already exists")
 	}
 
-	// Asocia el carrito vacío al usuario y créalo
+	// Guardar el nuevo usuario en la base de datos
 	if err := db.DB.Save(&newUser).Error; err != nil {
+		// Si ocurre un error al guardar, devolverlo
 		return nil, err
 	}
 
+	// Devolver el usuario creado
 	return &newUser, nil
 }
 
 func GetUser(usuario string) ([]models.User, error) {
 	var user []models.User
-	err := db.DB.Preload("Cart.Product").Find(&user).Error
+	err := db.DB.Find(&user).Error
 
 	return user, err
 }
 
 func GetByUser(username string) (models.User, error) {
 	var users models.User
-	err := db.DB.Preload("Cart.Product").Where("username = ?", username).Find(&users).Error
+	err := db.DB.Where("username = ?", username).Find(&users).Error
 
 	return users, err
 }
@@ -96,31 +92,41 @@ func UpdateProduct(productoIngresado string, newnameProduct string) (models.Prod
 	return producto, nil
 }
 
+// CreateProduct crea un nuevo producto con el nombre proporcionado
+// Si el producto ya existe, devuelve un error.
 func CreateProduct(nameProduct string) (models.Product, error) {
-	// Crea un nuevo producto con el nombre proporcionado
+	// Verificar si el producto ya existe en la base de datos
+	var existingProduct models.Product
+	if err := db.DB.Where("name = ?", nameProduct).First(&existingProduct).Error; err == nil {
+		// Si el producto ya existe, devolver un error
+		return models.Product{}, errors.New("product with the same name already exists")
+	}
+
+	// Crear un nuevo producto
 	newProduct := models.Product{
 		Name: nameProduct,
 	}
 
-	// Abre una transacción
+	// Iniciar una transacción
 	tx := db.DB.Begin()
 
-	// Maneja los errores de la transacción
+	// Manejo de errores de la transacción
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
 		}
 	}()
 
-	// Aquí deberías almacenar el producto en la base de datos o realizar otras operaciones necesarias
+	// Intentar almacenar el nuevo producto en la base de datos
 	if err := tx.Create(&newProduct).Error; err != nil {
-		tx.Rollback() // Deshace la transacción en caso de error
+		tx.Rollback() // Deshacer la transacción si hay un error
 		return models.Product{}, err
 	}
 
-	// Confirma la transacción si no hay errores
+	// Confirmar la transacción si no hay errores
 	tx.Commit()
 
+	// Devolver el producto creado
 	return newProduct, nil
 }
 
@@ -157,7 +163,7 @@ func DeleteProductByName(nameProduct string) error {
 func EditUser(currentUsername string, newUsername string) (*models.User, error) {
 	// Buscar el usuario actual en la base de datos
 	var existingUser models.User
-	if err := db.DB.Preload("Cart.Product").Where("username = ?", currentUsername).First(&existingUser).Error; err != nil {
+	if err := db.DB.Where("username = ?", currentUsername).First(&existingUser).Error; err != nil {
 		return nil, err
 	}
 
