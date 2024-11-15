@@ -1,45 +1,28 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
-	db "github.com/FelipeGeraldoblufus/product-microservice-go/config"
-	"github.com/FelipeGeraldoblufus/product-microservice-go/models"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	db "github.com/FelipeGeraldoblufus/Cart/config"
+	"github.com/FelipeGeraldoblufus/Cart/models"
+	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )
 
-func CreateUser(username string) (*models.User, error) {
-	// Crear un nuevo usuario sin el carrito (carrito ha sido eliminado)
-	newUser := models.User{
-		Username: username,
-	}
-
-	// Verificar si el nombre de usuario ya existe en la base de datos
-	var existingUser models.User
-	if err := db.DB.Where("username = ?", newUser.Username).First(&existingUser).Error; err == nil {
-		// Si el usuario ya existe, devolver un error
-		return nil, errors.New("username already exists")
-	}
-
-	// Guardar el nuevo usuario en la base de datos
-	if err := db.DB.Save(&newUser).Error; err != nil {
-		// Si ocurre un error al guardar, devolverlo
-		return nil, err
-	}
-
-	// Devolver el usuario creado
-	return &newUser, nil
-}
-
 func GetUser(usuario string) ([]models.User, error) {
 	var user []models.User
-	err := db.DB.Find(&user).Error
+	err := db.DB.Preload("Cart.Product").Find(&user).Error
 
 	return user, err
 }
 
 func GetByUser(username string) (models.User, error) {
 	var users models.User
-	err := db.DB.Where("username = ?", username).Find(&users).Error
+	err := db.DB.Preload("Cart.Product").Where("username = ?", username).Find(&users).Error
 
 	return users, err
 }
@@ -91,43 +74,76 @@ func UpdateProduct(productoIngresado string, newnameProduct string) (models.Prod
 
 	return producto, nil
 }
+func addcartitem(user models.User, product models.Product, q int) (models.CartItem, error) {
 
-// CreateProduct crea un nuevo producto con el nombre proporcionado
-// Si el producto ya existe, devuelve un error.
-func CreateProduct(nameProduct string) (models.Product, error) {
-	// Verificar si el producto ya existe en la base de datos
-	var existingProduct models.Product
-	if err := db.DB.Where("name = ?", nameProduct).First(&existingProduct).Error; err == nil {
-		// Si el producto ya existe, devolver un error
-		return models.Product{}, errors.New("product with the same name already exists")
+	var cartItem models.CartItem
+	cartItem.ProductID = product.ID
+	cartItem.Quantity = q
+	cartItem.UserID = user.ID
+
+	err := db.DB.Preload("Product").Create(&cartItem).Error
+
+	//err := db.DB.Create(&product).Error
+
+	return cartItem, err
+}
+
+func GetProductRest(w http.ResponseWriter, r *http.Request) {
+	var product models.Product
+	params := mux.Vars(r)
+	db.DB.First(&product, "name = ?", params["name"])
+	if product.Name != params["name"] {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("product not found"))
+		return
+
 	}
+	json.NewEncoder(w).Encode(&product)
 
-	// Crear un nuevo producto
+}
+
+func CreateProduct(nameProduct string) (models.Product, error) {
+	// Crea un nuevo producto con el nombre proporcionado
 	newProduct := models.Product{
 		Name: nameProduct,
 	}
 
-	// Iniciar una transacción
+	// Abre una transacción
 	tx := db.DB.Begin()
 
-	// Manejo de errores de la transacción
+	// Maneja los errores de la transacción
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
 		}
 	}()
 
-	// Intentar almacenar el nuevo producto en la base de datos
+	// Aquí deberías almacenar el producto en la base de datos o realizar otras operaciones necesarias
 	if err := tx.Create(&newProduct).Error; err != nil {
-		tx.Rollback() // Deshacer la transacción si hay un error
+		tx.Rollback() // Deshace la transacción en caso de error
 		return models.Product{}, err
 	}
 
-	// Confirmar la transacción si no hay errores
+	// Confirma la transacción si no hay errores
 	tx.Commit()
 
-	// Devolver el producto creado
 	return newProduct, nil
+}
+
+func CreateProductRest(w http.ResponseWriter, r *http.Request) {
+
+	var product models.Product
+	json.NewDecoder(r.Body).Decode(&product)
+	createdproduct := db.DB.Create(&product)
+	err := createdproduct.Error
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+
+	}
+
+	json.NewEncoder(w).Encode(&product)
 }
 
 func DeleteProductByName(nameProduct string) error {
@@ -648,7 +664,7 @@ func RemoveCartItemFromUser(w http.ResponseWriter, r *http.Request) {
 func EditUser(currentUsername string, newUsername string) (*models.User, error) {
 	// Buscar el usuario actual en la base de datos
 	var existingUser models.User
-	if err := db.DB.Where("username = ?", currentUsername).First(&existingUser).Error; err != nil {
+	if err := db.DB.Preload("Cart.Product").Where("username = ?", currentUsername).First(&existingUser).Error; err != nil {
 		return nil, err
 	}
 
@@ -662,6 +678,43 @@ func EditUser(currentUsername string, newUsername string) (*models.User, error) 
 
 	// Devolver el usuario actualizado
 	return &existingUser, nil
+}
+
+func EditUserREST(w http.ResponseWriter, r *http.Request) {
+	// Estructura para decodificar la solicitud
+	var requestData struct {
+		CurrentUsername string `json:"currentUsername"`
+		NewUsername     string `json:"newUsername"`
+	}
+
+	// Decodificar la solicitud y obtener los nombres de usuario
+	err := json.NewDecoder(r.Body).Decode(&requestData)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Buscar el usuario actual en la base de datos
+	var existingUser models.User
+	if err := db.DB.Preload("Cart.Product").Where("username = ?", requestData.CurrentUsername).First(&existingUser).Error; err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("User not found"))
+		return
+	}
+
+	// Modificar el nombre de usuario
+	existingUser.Username = requestData.NewUsername
+
+	// Guardar los cambios en la base de datos
+	if err := db.DB.Save(&existingUser).Error; err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Responder con el usuario actualizado
+	json.NewEncoder(w).Encode(&existingUser)
 }
 
 func DeleteUser(usuario string) error {
@@ -694,4 +747,248 @@ func DeleteUser(usuario string) error {
 	return nil
 }
 
+func CreateOrder(username string, cartItemIDs []uint) (*models.Order, error) {
+	user, err := GetByUser(username)
+	if err != nil {
+		return nil, err
+	}
 
+	// Preload de los CartItems para asegurar que se carguen con el usuario
+	if err := db.DB.Preload("Cart.Product").First(&user, user.ID).Error; err != nil {
+		return nil, fmt.Errorf("User not found: %v", err)
+	}
+
+	// Verificar si el carrito del usuario está vacío
+	if len(user.Cart) == 0 {
+		return nil, errors.New("cannot create order with an empty cart")
+	}
+
+	// Crear una nueva orden
+	order := models.Order{
+		UserID: user.ID,
+		User:   user,
+		Items:  make([]models.CartItem, 0), // Inicializar la lista de CartItems para evitar nil pointer
+	}
+
+	// Iterar sobre los CartItemIDs proporcionados
+	for _, cartItemID := range cartItemIDs {
+		// Buscar el CartItem en el carrito del usuario
+		var cartItemToRemove *models.CartItem
+		for i, item := range user.Cart {
+			if item.ID == cartItemID {
+				cartItemToRemove = &user.Cart[i]
+				break
+			}
+		}
+
+		// Verificar si se encontró el CartItem
+		if cartItemToRemove == nil {
+			return nil, fmt.Errorf("CartItem with ID %d not found in user's cart", cartItemID)
+		}
+
+		// Asignar el OrderID al CartItem
+		cartItemToRemove.OrderID = order.ID
+
+		// Actualizar el CartItem en la base de datos
+		if err := db.DB.Save(cartItemToRemove).Error; err != nil {
+			return nil, err
+		}
+
+		// Agregar el CartItem a la lista de la orden
+		order.Items = append(order.Items, *cartItemToRemove)
+	}
+
+	// Limpiar el carrito del usuario después de crear la orden
+	user.Cart = []models.CartItem{}
+
+	// Guardar los cambios en el usuario
+	if err := db.DB.Save(&user).Error; err != nil {
+		return nil, err
+	}
+
+	// Crear la orden
+	if err := db.DB.Create(&order).Error; err != nil {
+		return nil, err
+	}
+
+	return &order, nil
+}
+
+func CreateOrderREST(w http.ResponseWriter, r *http.Request) {
+	var requestData struct {
+		Username string `json:"username"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	var user models.User
+	if err := db.DB.Preload("Cart.Product").First(&user, "username = ?", requestData.Username).Error; err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("User not found"))
+		return
+	}
+
+	// Verificar si el carrito del usuario está vacío
+	if len(user.Cart) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Cannot create order with an empty cart"))
+		return
+	}
+
+	// Crear una nueva orden
+	order := models.Order{
+		UserID: user.ID,
+		User:   user,
+		Items:  user.Cart,
+	}
+
+	if err := db.DB.Create(&order).Error; err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Limpiar el carrito del usuario después de crear la orden
+	user.Cart = []models.CartItem{}
+
+	for _, cartItem := range user.Cart {
+		if err := db.DB.Delete(&cartItem).Error; err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+	}
+
+	if err := db.DB.Save(&user).Error; err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	json.NewEncoder(w).Encode(&order)
+}
+
+func GetOrdersByUsername(username string) ([]models.Order, error) {
+	var user models.User
+
+	// Buscar al usuario por su nombre de usuario
+	if err := db.DB.Preload("Cart.Product").Preload("Cart").Preload("Cart.Product").First(&user, "username = ?", username).Error; err != nil {
+		return nil, err
+	}
+
+	var orders []models.Order
+
+	// Buscar las órdenes asociadas al usuario
+	if err := db.DB.Preload("User.Cart.Product").Preload("Items.Product").Find(&orders, "user_id = ?", user.ID).Error; err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}
+
+func GetOrdersByUsernameREST(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	var user models.User
+
+	// Buscar al usuario por su nombre de usuario
+	if err := db.DB.Preload("Cart.Product").Preload("Cart").Preload("Cart.Product").First(&user, "username = ?", params["username"]).Error; err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("User not found"))
+		return
+	}
+
+	var orders []models.Order
+
+	// Buscar las órdenes asociadas al usuario
+	if err := db.DB.Preload("User.Cart.Product").Preload("Items.Product").Find(&orders, "user_id = ?", user.ID).Error; err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Aquí 'user' tiene la información del usuario y 'orders' tiene la información de las órdenes.
+
+	// Puedes enviar 'user' y 'orders' como respuesta JSON.
+
+	json.NewEncoder(w).Encode(&orders)
+}
+
+func UpdateCartItemQuantity(cartItemID uint, newQuantity int) error {
+	// Buscar el CartItem por su ID
+	var cartItem models.CartItem
+	if err := db.DB.First(&cartItem, cartItemID).Error; err != nil {
+		return fmt.Errorf("CartItem not found: %v", err)
+	}
+
+	// Actualizar la cantidad del CartItem
+	cartItem.Quantity = newQuantity
+
+	// Guardar los cambios en la base de datos
+	if err := db.DB.Save(&cartItem).Error; err != nil {
+		return fmt.Errorf("Error updating CartItem quantity: %v", err)
+	}
+
+	return nil
+}
+
+func UpdateCartItemOrder(cartItemID uint, OrderID uint) error {
+	// Buscar el CartItem por su ID
+	var cartItem models.CartItem
+	if err := db.DB.First(&cartItem, cartItemID).Error; err != nil {
+		return fmt.Errorf("CartItem not found: %v", err)
+	}
+
+	// Actualizar la cantidad del CartItem
+	cartItem.OrderID = OrderID
+
+	// Guardar los cambios en la base de datos
+	if err := db.DB.Save(&cartItem).Error; err != nil {
+		return fmt.Errorf("Error updating CartItem quantity: %v", err)
+	}
+
+	return nil
+}
+
+func RemoveCartItemFromUserByUsername(username string, cartItemID uint) (*models.User, error) {
+	// Obtener el usuario por nombre de usuario
+	user, err := GetByUser(username)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.DB.Preload("Cart.Product").First(&user, user.ID).Error; err != nil {
+		return nil, fmt.Errorf("User not found: %v", err)
+	}
+
+	// Buscar y eliminar el CartItem del carrito del usuario
+	var cartItemToRemove models.CartItem
+	for i, item := range user.Cart {
+		if item.ID == cartItemID {
+			cartItemToRemove = item
+
+			// Paso 1: Eliminar el CartItem del carrito
+			user.Cart = append(user.Cart[:i], user.Cart[i+1:]...)
+			break
+		}
+	}
+
+	// Verificar si se encontró el CartItem
+	if cartItemToRemove.ID == 0 {
+		return nil, fmt.Errorf("CartItem not found")
+	}
+
+	// Paso 2: Eliminar el CartItem de la base de datos
+	if err := db.DB.Delete(&cartItemToRemove).Error; err != nil {
+		return nil, fmt.Errorf("Error deleting CartItem: %v", err)
+	}
+
+	// Paso 3: Actualizar el usuario en la base de datos después de la eliminación
+	if err := db.DB.Save(&user).Error; err != nil {
+		return nil, fmt.Errorf("Error saving user: %v", err)
+	}
+
+	return &user, nil
+}

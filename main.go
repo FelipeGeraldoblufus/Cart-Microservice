@@ -3,10 +3,14 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 
-	"github.com/FelipeGeraldoblufus/product-microservice-go/config"
-	"github.com/FelipeGeraldoblufus/product-microservice-go/internal"
-
+	//"github.com/ValeHenriquez/example-rabbit-go/users-server/config"
+	//"github.com/ValeHenriquez/example-rabbit-go/users-server/internal"
+	"github.com/FelipeGeraldoblufus/Cart/config"
+	"github.com/FelipeGeraldoblufus/Cart/controllers"
+	"github.com/FelipeGeraldoblufus/Cart/internal"
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -25,16 +29,14 @@ func getChannel() *amqp.Channel {
 	return ch
 }
 
-// Declara la cola si no existe
 func declareQueue(ch *amqp.Channel) amqp.Queue {
-	// Declarar la cola si no existe
-	q, err := ch.QueueDeclare(
-		"product", // name
-		true,      // durable (la cola sobrevivirá a reinicios de RabbitMQ)
-		false,     // delete when unused (no se elimina automáticamente cuando está vacía)
-		false,     // exclusive
-		false,     // no-wait
-		nil,       // arguments
+	q, err := ch.QueueDeclarePassive(
+		"cart", // name
+		false,  // durable
+		false,  // delete when unused
+		false,  // exclusive
+		false,  // no-wait
+		nil,    // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
 	return q
@@ -68,39 +70,52 @@ func registerConsumer(ch *amqp.Channel, q amqp.Queue) <-chan amqp.Delivery {
 
 func main() {
 
-	fmt.Println("Product MS starting...")
+	fmt.Println("Users MS starting...")
 
-	// Cargar las variables de entorno
 	godotenv.Load()
 	fmt.Println("Loaded env variables...")
 
-	// Configurar la base de datos
 	config.SetupDatabase()
 	fmt.Println("Database connection configured...")
 
-	// Configurar RabbitMQ
 	config.SetupRabbitMQ()
 	fmt.Println("RabbitMQ Connection configured...")
 
-	// Obtener canal de RabbitMQ
-	ch := getChannel()
-	// Declarar la cola y obtener su estructura
-	q := declareQueue(ch)
-	// Establecer la calidad de servicio en el canal
-	setQoS(ch)
-	// Registrar un consumidor para la cola
-	msgs := registerConsumer(ch, q)
+	ch := getChannel()              // Obtiene un canal de RabbitMQ
+	q := declareQueue(ch)           // Declara una cola y obtiene su estructura
+	setQoS(ch)                      // Establece la calidad de servicio en el canal
+	msgs := registerConsumer(ch, q) // Registra un consumidor para la cola y obtiene un canal de entrega de mensajes
 
-	// Iniciar el procesamiento de mensajes en un goroutine
 	var forever chan struct{}
 	go func() {
 		for d := range msgs {
-			// Llamar al manejador de mensajes internos con el mensaje y el canal de RabbitMQ
-			internal.Handler(d, ch)
+			internal.Handler(d, ch) // Llama al manejador de mensajes internos con el mensaje y el canal de RabbitMQ
 		}
 	}()
 
-	// Esperar indefinidamente a los mensajes
+	r := mux.NewRouter()
+
+	r.HandleFunc("/api/product", controllers.CreateProductRest).Methods("POST")
+	r.HandleFunc("/api/product/{name}", controllers.GetProductRest).Methods("GET")
+	r.HandleFunc("/api/product/{name}", controllers.DeleteProductRest).Methods("DELETE")
+	r.HandleFunc("/api/product/{name}", controllers.UpdateProductRest).Methods("PUT")
+
+	r.HandleFunc("/api/cartitem", controllers.CreateCartItemRest).Methods("POST")
+	r.HandleFunc("/api/cartitem/{id}", controllers.GetCartItemRest).Methods("GET")
+	r.HandleFunc("/api/cartitem/{id}", controllers.DeleteCartItemRest).Methods("DELETE")
+	r.HandleFunc("/api/cartitem/{id}", controllers.UpdateCartItemRest).Methods("PUT")
+
+	r.HandleFunc("/api/user", controllers.CreateUserRest).Methods("POST")
+	r.HandleFunc("/api/user/{username}", controllers.GetUserRest).Methods("GET")
+	r.HandleFunc("/api/user/addcartitem", controllers.AddCartItemToUser).Methods("POST")
+	r.HandleFunc("/api/user/removecartitem", controllers.RemoveCartItemFromUser).Methods("DELETE")
+	r.HandleFunc("/api/user/edituser", controllers.EditUserREST).Methods("PUT")
+
+	r.HandleFunc("/api/order", controllers.CreateOrderREST).Methods("POST")
+	r.HandleFunc("/api/user/orders/{username}", controllers.GetOrdersByUsernameREST).Methods("GET")
+
+	http.ListenAndServe(":3000", r)
+
 	log.Printf(" [*] Awaiting RPC requests")
-	<-forever
+	<-forever // Espera indefinidamente*/
 }

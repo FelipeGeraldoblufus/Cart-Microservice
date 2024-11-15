@@ -3,8 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
-	
-	"github.com/FelipeGeraldoblufus/product-microservice-go/models"
+
+	"github.com/FelipeGeraldoblufus/Cart/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -32,6 +32,7 @@ func SetupDatabase() {
 
 func autoMigrate(connection *gorm.DB) {
 	connection.Debug().AutoMigrate(&models.Product{})
+	connection.Debug().AutoMigrate(&models.CartItem{})
 	connection.Debug().AutoMigrate(&models.User{})
-	
+	connection.Debug().AutoMigrate(&models.Order{})
 }
