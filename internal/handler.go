@@ -8,8 +8,8 @@ import (
 
 	//"github.com/ValeHenriquez/example-rabbit-go/tasks-server/controllers"
 	//"github.com/ValeHenriquez/example-rabbit-go/tasks-server/models"
-	"github.com/FelipeGeraldoblufus/product-microservice-go/controllers"
-	"github.com/FelipeGeraldoblufus/product-microservice-go/models"
+	"github.com/FelipeGeraldoblufus/Cart/controllers"
+	"github.com/FelipeGeraldoblufus/Cart/models"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -402,6 +402,218 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 			Data:    nil, // No necesitas enviar datos específicos en la respuesta
 		}
 
+	case "CREATE_ORDER":
+		log.Println(" [.] Creating order")
+		var data struct {
+			Username    string `json:"username"`
+			CartItemIDs []uint `json:"cartItemIDs"`
+		}
+		var err error
+
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Verificar que el campo necesario (username) no esté vacío
+		if data.Username == "" {
+			response = models.Response{
+				Success: "error",
+				Message: "Username is required",
+				Data:    nil,
+			}
+			break
+		}
+
+		// Llama a la función para crear la orden
+		createdOrder, err := controllers.CreateOrder(data.Username, data.CartItemIDs)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error creating order",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Convertir createdOrder a formato JSON y luego a []byte
+		orderData, err := json.Marshal(createdOrder)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error encoding order data",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "Order created successfully",
+			Data:    orderData,
+		}
+	case "GET_ORDERSBYUSERNAME":
+		log.Println(" [.] Getting orders by Username")
+		var data struct {
+			Username string `json:"username"`
+		}
+		var err error
+		var ordersJson []byte
+		var orders []models.Order
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		orders, err = controllers.GetOrdersByUsername(data.Username)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error getting orders",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		ordersJson, err = json.Marshal(orders)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error marshaling JSON",
+				Data:    []byte(err.Error()),
+			}
+		} else {
+			response = models.Response{
+				Success: "success",
+				Message: "Orders retrieved",
+				Data:    ordersJson,
+			}
+		}
+
+	case "EDIT_CARTITEM":
+		log.Println(" [.] updating cartitem")
+		var data struct {
+			CartItemID uint `json:"cartItemID"`
+			Quantity   int  `json:"quantity"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.CartItemID, data.Quantity)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para eliminar el CartItem
+		err = controllers.UpdateCartItemQuantity(data.CartItemID, data.Quantity)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error updating cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "CartItem updated successfully",
+			Data:    []byte("Cantidad actualizada exitosamente"), // No necesitas enviar datos específicos en la respuesta
+		}
+
+	case "EDIT_CARTITEMORDER":
+		log.Println(" [.] updating cartitem")
+		var data struct {
+			CartItemID uint `json:"cartItemID"`
+			Order      uint `json:"OrderID"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.CartItemID, data.Order)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para eliminar el CartItem
+		err = controllers.UpdateCartItemOrder(data.CartItemID, data.Order)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error updating cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "CartItem updated successfully",
+			Data:    []byte("Orden asignada exitosamente"), // No necesitas enviar datos específicos en la respuesta
+		}
+
+	case "DELETE_CARTITEM":
+		log.Println(" [.] Deleting cartitem")
+		var data struct {
+			Username   string `json:"username"`
+			CartItemID uint   `json:"cartItemID"`
+		}
+		var err error
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.Username, data.CartItemID)
+
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Llama a la función para eliminar el CartItem
+		_, err = controllers.RemoveCartItemFromUserByUsername(data.Username, data.CartItemID)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error deleting cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		response = models.Response{
+			Success: "success",
+			Message: "CartItem deleted successfully",
+			Data:    []byte("CartItem deleted successfully"), // No necesitas enviar datos específicos en la respuesta
+		}
 	case "CREATE_CATEGORY":
 		log.Println(" [.] Creating category")
 		//log.Println("data ", Payload.Data.Data)
