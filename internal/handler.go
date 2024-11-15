@@ -221,6 +221,56 @@ func Handler(d amqp.Delivery, ch *amqp.Channel) {
 			}
 		}
 
+	case "CREATE_CARTITEM":
+		log.Println(" [.] Creating cartitem")
+		var data struct {
+			Username    string `json:"username"`
+			ProductName string `json:"productName"`
+			Quantity    int    `json:"quantity"`
+		}
+		var err error
+		var cartitem *models.CartItem // Cambiado a puntero
+
+		// Log de depuración para verificar los datos recibidos
+		log.Printf("Received data: %+v\n", data.Username, data.ProductName, data.Quantity)
+		var dataJson []byte
+		err = json.Unmarshal(Payload.Data, &data)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error decoding JSON",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Ahora asigna el resultado de la función a cartitem
+		cartitem, err = controllers.AddCartItemToUserByID(data.Username, data.ProductName, data.Quantity)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error creating cartitem",
+				Data:    []byte(err.Error()),
+			}
+			break
+		}
+
+		// Ahora puedes acceder a cartitem.ID
+		dataJson, err = json.Marshal(cartitem.ID)
+		if err != nil {
+			response = models.Response{
+				Success: "error",
+				Message: "Error marshaling JSON",
+				Data:    []byte(err.Error()),
+			}
+		} else {
+			response = models.Response{
+				Success: "success",
+				Message: "Cartitem created",
+				Data:    dataJson,
+			}
+		}
+
 	case "EDIT_USER":
 		log.Println(" [.] Editing user")
 		var data struct {
