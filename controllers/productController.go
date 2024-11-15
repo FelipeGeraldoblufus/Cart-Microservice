@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	db "github.com/FelipeGeraldoblufus/Cart/config"
-	"github.com/FelipeGeraldoblufus/Cart/models"
+	db "github.com/FelipeGeraldoblufus/product-microservice-go/config"
+	"github.com/FelipeGeraldoblufus/product-microservice-go/models"
 	"github.com/gorilla/mux"
 	"gorm.io/gorm"
 )

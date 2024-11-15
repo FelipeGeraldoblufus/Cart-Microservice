@@ -7,9 +7,9 @@ import (
 
 	//"github.com/ValeHenriquez/example-rabbit-go/users-server/config"
 	//"github.com/ValeHenriquez/example-rabbit-go/users-server/internal"
-	"github.com/FelipeGeraldoblufus/Cart/config"
-	"github.com/FelipeGeraldoblufus/Cart/controllers"
-	"github.com/FelipeGeraldoblufus/Cart/internal"
+	"github.com/FelipeGeraldoblufus/product-microservice-go/config"
+	"github.com/FelipeGeraldoblufus/product-microservice-go/controllers"
+	"github.com/FelipeGeraldoblufus/product-microservice-go/internal"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
