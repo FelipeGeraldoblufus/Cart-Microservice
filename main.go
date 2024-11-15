@@ -31,7 +31,7 @@ func getChannel() *amqp.Channel {
 
 func declareQueue(ch *amqp.Channel) amqp.Queue {
 	q, err := ch.QueueDeclarePassive(
-		"cart", // name
+		"product", // name
 		false,  // durable
 		false,  // delete when unused
 		false,  // exclusive
